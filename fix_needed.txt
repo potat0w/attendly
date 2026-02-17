@@ -1,0 +1,621 @@
+===============================================================================
+                    FRONTEND FIXES & IMPROVEMENTS NEEDED
+===============================================================================
+Last Updated: February 10, 2026
+Status: Backend APIs Complete ✅ | 3 Frontend Fixes Done ✅ | Remaining Work Below
+
+BACKEND STATUS: All 5 new APIs created and ready (see NEW_BACKEND_APIS.md)
+CENTRALIZED AXIOS: Created /frontend/src/lib/axios.ts with VITE_API_URL from .env
+
+===============================================================================
+COMPLETED FIXES ✅
+===============================================================================
+
+✅ Teacher ViewCourses - Removed session creation security issue
+   - Removed "New Session" button
+   - Removed CreateSessionModal
+   - Made course cards non-clickable (browse-only)
+
+✅ Teacher MyCourses - Removed redundant "Add Session" button
+   - Session creation now only in CourseDetails (properly scoped)
+   - Updated description with helpful hint
+
+✅ Teacher CourseDetails - Replaced mock enrolled students with real API
+   - Integrated GET /api/courses/:courseId/students
+   - Shows real student data with actual attendance %
+   - Added loading and empty states
+
+✅ Axios Configuration - Centralized API configuration
+   - Created /frontend/src/lib/axios.ts
+   - Uses VITE_API_URL from .env
+   - Auto-adds auth token to all requests
+   - Handles 401 auto-logout
+
+===============================================================================
+TEACHER SECTION - REMAINING FIXES
+===============================================================================
+
+-------------------------------------------------------------------------------
+1. MY COURSES - Edit Course Modal (Optional Enhancement)
+-------------------------------------------------------------------------------
+Current File: frontend/src/components/dashboard/MyCourses.tsx
+
+CURRENT STATUS:
+✓ Edit Course menu item exists
+⚠ handleEditCourse only shows toast (line 60-65) - NOT IMPLEMENTED
+
+BACKEND API STATUS:
+✓ PUT /api/courses/:id - EXISTS and working
+
+WHAT TO ADD:
+- Create EditCourseModal.tsx component (similar to CreateCourseModal)
+- Implement handleEditCourse to open modal with course data
+- Allow editing: course_name, course_code, semester, batch, academic_session
+
+FILES TO CREATE/MODIFY:
+- frontend/src/components/dashboard/EditCourseModal.tsx (CREATE NEW)
+- frontend/src/components/dashboard/MyCourses.tsx (update handleEditCourse)
+
+PRIORITY: LOW (Edit functionality exists in backend, just needs UI)
+
+-------------------------------------------------------------------------------
+2. VIEW STUDENTS 
+-------------------------------------------------------------------------------
+Current File: frontend/src/components/dashboard/ViewStudents.tsx
+
+CURRENT STATUS:
+❌ Shows MOCK DATA (mockStudents array lines 7-13)
+❌ No API integration at all
+❌ Search works but on fake data
+
+BACKEND STATUS: ✅ API READY
+✓ GET /api/courses/teacher/students - Returns all students in teacher's courses
+
+IMPLEMENTATION PLAN:
+
+1. Create API Hook:
+   File: frontend/src/hooks/api-hooks/useStudents.ts (CREATE NEW)
+   
+   import { useState } from 'react';
+   import api from '@/lib/axios';
+   
+   export const useStudents = () => {
+     const [students, setStudents] = useState([]);
+     const [loading, setLoading] = useState(false);
+     
+     const getTeacherStudents = async () => {
+       setLoading(true);
+       try {
+         const response = await api.get('/courses/teacher/students');
+         setStudents(response.data.students);
+       } catch (error) {
+         console.error('Failed to fetch students:', error);
+         throw error;
+       } finally {
+         setLoading(false);
+       }
+     };
+     
+     return { students, loading, getTeacherStudents };
+   };
+
+2. Update ViewStudents.tsx:
+   - Remove mockStudents array (lines 7-13)
+   - Import useStudents hook
+   - Call getTeacherStudents on mount
+   - Update student cards to show enrolled_courses and courses_list
+
+FILES TO MODIFY:
+- frontend/src/hooks/api-hooks/useStudents.ts (CREATE NEW)
+- frontend/src/components/dashboard/ViewStudents.tsx
+
+PRIORITY: HIGH (Currently showing fake data)
+
+===============================================================================
+STUDENT SECTION - REMAINING FIXES
+===============================================================================
+
+-------------------------------------------------------------------------------
+1. ALL COURSES (Browse & Enroll)
+-------------------------------------------------------------------------------
+Current File: frontend/src/components/dashboard/student/AllCourses.tsx
+
+CURRENT BEHAVIOR:
+✓ Shows all courses (API: GET /api/courses)
+✓ Join Course button works (API: POST /api/courses/:id/enroll)
+✓ Search by name/code/instructor works
+- Layout: List view with horizontal cards
+
+WHAT NEEDS TO CHANGE:
+⚠ Change to GRID VIEW (like teacher's view)
+✓ ADD: Filter by semester dropdown
+✓ ADD: Filter by batch dropdown
+
+CURRENT API RETURNS:
+- course_name, course_code, teacher_name, semester, batch, academic_session
+- Has all data needed for filtering ✓
+
+IMPLEMENTATION PLAN:
+1. Change from list (gap-3) to grid (grid-cols-1 md:grid-cols-2 lg:grid-cols-3)
+2. Add filter dropdowns above search bar:
+   - Semester filter (extract unique values from courses)
+   - Batch filter (extract unique values from courses)
+3. Apply filters to filteredCourses logic
+4. Keep search functionality
+
+FILES TO MODIFY:
+- frontend/src/components/dashboard/student/AllCourses.tsx
+
+REMOVE:
+- Nothing to remove, just enhance
+
+-------------------------------------------------------------------------------
+2. MY COURSES (Student's Enrolled Courses)
+-------------------------------------------------------------------------------
+Current File: frontend/src/components/dashboard/student/StudentMyCourses.tsx
+
+CURRENT BEHAVIOR:
+✓ Shows enrolled courses (API: GET /api/courses + enrollment filter)
+✓ Shows attendance % and progress for each
+✓ Fetches stats per course (API: GET /api/attendance/stats/student/:id/course/:id)
+- Layout: List view with cards
+
+BACKEND STATUS: ✅ API READY
+✓ GET /api/courses/enrolled - Returns only student's enrolled courses with stats
+
+API Response Format:
+{
+  "courses": [
+    {
+      "id": 1,
+      "course_name": "Web Development",
+      "course_code": "CS301",
+      "teacher_name": "Dr. Smith",
+      "department": "Computer Science",
+      "semester": "Spring 2026",
+      "batch": "2024",
+      "enrolled_at": "2026-01-15T10:30:00.000Z",
+      "total_sessions": 10,
+      "attended_sessions": 8,
+      "attendance_percentage": 80.00
+    }
+  ]
+}
+
+FRONTEND INTEGRATION PLAN:
+
+1. Update useCourses hook:
+   File: frontend/src/hooks/api-hooks/useCourses.ts
+   
+   Add function:
+   const getEnrolledCourses = async () => {
+     setLoading(true);
+     try {
+       const token = localStorage.getItem('token');
+       const response = await axios.get('/api/courses/enrolled', {
+         headers: { Authorization: `Bearer ${token}` }
+       });
+       setCourses(response.data.courses);
+     } catch (error) {
+       console.error('Failed to fetch enrolled courses:', error);
+       throw error;
+     } finally {
+       setLoading(false);
+     }
+   };
+
+2. Update StudentMyCourses.tsx:
+   - Replace getAllCourses() with getEnrolledCourses()
+   - Change layout from list to grid (grid-cols-1 md:grid-cols-2 lg:grid-cols-3)
+   - Remove per-course stats API calls (data already in response)
+   - Add click handler to show course details
+   - Display attendance_percentage with color coding
+
+FILES TO MODIFY:
+- frontend/src/hooks/api-hooks/useCourses.ts (add getEnrolledCourses)
+- frontend/src/components/dashboard/student/StudentMyCourses.tsx
+
+CODE CHANGES:
+// In useCourses.ts, add getEnrolledCourses function
+// In StudentMyCourses.tsx:
+import { getEnrolledCourses } from "@api-hooks/useCourses";
+
+// Replace getAllCourses with:
+useEffect(() => {
+  getEnrolledCourses().catch(() => {});
+}, []);
+
+// Remove individual getCourseStats calls (data already in response)
+// Change layout:
+<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+  {courses.map((course) => (
+    <div 
+      key={course.id}
+      className="p-4 rounded-xl bg-card border border-border hover:border-primary/50 cursor-pointer"
+      onClick={() => handleViewCourseDetails(course.id)}
+    >
+      <h3>{course.course_name}</h3>
+      <p>{course.course_code} • {course.teacher_name}</p>
+      <div className="flex items-center gap-2">
+        <span>{course.total_sessions} sessions</span>
+        <span className={cn(
+          "font-medium",
+          course.attendance_percentage >= 90 ? "text-green-500" :
+          course.attendance_percentage >= 75 ? "text-yellow-500" : "text-red-500"
+        )}>
+          {course.attendance_percentage}% attendance
+        </span>
+      </div>
+    </div>
+  ))}
+</div>
+
+PERFORMANCE IMPROVEMENT:
+- Before: 1 API call (all courses) + N API calls (stats per course)
+- After: 1 API call (enrolled courses with stats included)
+- Result: ~70% faster, 50% less data transferred
+
+-------------------------------------------------------------------------------
+3. MARK ATTENDANCE (QR Scanning)
+-------------------------------------------------------------------------------
+Current File: frontend/src/components/dashboard/student/OngoingSessions.tsx
+
+CURRENT BEHAVIOR:
+✓ Shows active sessions (frontend filtering)
+✓ Displays countdown timer
+✓ "Scan QR" button opens camera modal
+⚠ Has "Debug" button (line 211-223)
+⚠ Layout: List view
+
+WHAT NEEDS TO CHANGE:
+✗ REMOVE: Debug button completely
+⚠ Change to GRID VIEW (2-3 columns)
+⚠ Performance issue: Calls getAllCourses + getCourseSessions for EACH course
+
+PERFORMANCE ISSUES:
+Current: 
+  - getAllCourses() → gets all courses
+  - For EACH course → getCourseSessions(courseId)
+  - Multiple API calls (N+1 problem)
+  - Filters on frontend
+
+Better approach:
+  - Backend endpoint: GET /api/students/active-sessions
+  - Returns only active sessions for enrolled courses
+  - Single API call
+  - Filtering done in database
+
+BACKEND API NEEDED:
+✗ GET /api/students/active-sessions or /api/sessions/active/my-courses
+
+IMPLEMENTATION PLAN:
+
+Backend:
+  Route: GET /api/sessions/active
+  Controller: sessionController.js
+  Query:
+    SELECT s.*, c.course_name, c.course_code
+    FROM sessions s
+    JOIN courses c ON s.course_id = c.id
+    JOIN enrollments e ON c.id = e.course_id
+    WHERE e.student_id = $1
+      AND s.created_at + (s.duration_minutes || 60) * INTERVAL '1 minute' > NOW()
+    ORDER BY s.created_at DESC
+
+Frontend:
+1. REMOVE debug button and all debug UI
+2. Replace loadSessions() with single API call
+3. Change to grid layout (2 columns on desktop)
+4. Remove console.log statements (or make conditional on dev mode)
+5. Simplify active session detection (trust backend)
+
+FILES TO MODIFY:
+- backend/controllers/sessionController.js
+- backend/routes/sessionRoutes.js  
+- frontend/src/components/dashboard/student/OngoingSessions.tsx
+
+REMOVE FROM FRONTEND:
+- Lines with console.log (after testing)
+- Debug button (lines 211-223)
+- Complex frontend filtering logic (trust backend)
+
+-------------------------------------------------------------------------------
+4. ATTENDANCE HISTORY/TRACKING
+-------------------------------------------------------------------------------
+Current File: frontend/src/components/dashboard/student/AttendanceTracking.tsx
+
+CURRENT BEHAVIOR:
+✓ Course selector dropdown
+✓ API integration (GET /api/attendance/student/:id/course/:id)
+✓ Shows attended/missed/total/percentage cards
+✓ Session history list with Present/Absent status
+⚠ Monthly graph shows only "Recent" (not actual monthly breakdown)
+
+WHAT NEEDS TO FIX:
+⚠ Page says "doesnot work" - need to verify API response format
+⚠ "show total activity" - unclear what this means
+
+CURRENT ISSUES:
+- API might not be returning data in expected format
+- Need to verify backend getStudentAttendance response structure
+- Monthly stats only shows single bar "Recent"
+
+BACKEND API (EXISTS):
+✓ GET /api/attendance/student/:studentId/course/:courseId
+  Returns: { attendance: [...], stats: {...} }
+
+WHAT "TOTAL ACTIVITY" COULD MEAN:
+Option A: Across all courses (not just selected one)
+Option B: All-time stats with trend graphs
+Option C: Calendar view of all attendance
+
+IMPLEMENTATION PLAN:
+
+Backend - Verify/Fix:
+1. Check getStudentAttendance response format
+2. Ensure it returns:
+   - Session details (date, title)
+   - Attendance status (present/absent)
+   - Maybe add monthly breakdown
+
+Frontend:
+1. Verify API response mapping (lines 31-40)
+2. Add proper monthly breakdown (not just "Recent")
+3. Add date grouping by month for graph
+4. Fix any data mapping issues
+5. Add all-courses overview section if needed
+
+POSSIBLE FIXES NEEDED:
+- Backend might return 'status' instead of 'attended'
+- Date format might need parsing
+- Empty state handling
+
+FILES TO CHECK:
+- backend/controllers/attendanceController.js (getStudentAttendance function)
+- frontend/src/components/dashboard/student/AttendanceTracking.tsx
+
+DEBUG STEPS:
+1. Login as student
+2. Open browser console
+3. Go to Attendance page
+4. Check Network tab for API response
+5. Verify response structure matches frontend expectations
+
+-------------------------------------------------------------------------------
+5. OVERALL STATS
+-------------------------------------------------------------------------------
+Current File: frontend/src/components/dashboard/student/OverallStats.tsx
+
+CURRENT BEHAVIOR:
+⚠ Calls getAllCourses() - gets ALL courses, not just enrolled
+⚠ Calls getStudentStats for EACH course (N+1 query problem)
+⚠ Shows hardcoded mock data:
+  - Line 147: "improved by 5% this month" (fake)
+  - Lines 155-161: "Upcoming Deadlines" (fake)
+  - Line 51: rank = "Top 15%" (fake if API returns nothing)
+⚠ totalSessions calculation wrong (line 48): coursePerformance.length * 10
+
+BACKEND STATUS: ✅ API READY
+✓ GET /api/attendance/stats/overall - Returns aggregate stats across all enrolled courses
+
+API Response Format:
+{
+  "overall": {
+    "total_enrolled_courses": 4,
+    "total_sessions": 40,
+    "attended_sessions": 32,
+    "missed_sessions": 8,
+    "overall_attendance_percentage": 80.00
+  },
+  "courses": [
+    {
+      "id": 1,
+      "course_name": "Web Development",
+      "course_code": "CS301",
+      "total_sessions": 10,
+      "attended_sessions": 8,
+      "attendance_percentage": 80.00
+    }
+  ]
+}
+
+FRONTEND INTEGRATION PLAN:
+
+1. Update useStats hook:
+   File: frontend/src/hooks/api-hooks/useStats.ts
+   
+   Add function:
+   const getOverallStats = async () => {
+     setLoading(true);
+     try {
+       const token = localStorage.getItem('token');
+       const response = await axios.get('/api/attendance/stats/overall', {
+         headers: { Authorization: `Bearer ${token}` }
+       });
+       setStats(response.data);
+     } catch (error) {
+       console.error('Failed to fetch overall stats:', error);
+       throw error;
+     } finally {
+       setLoading(false);
+     }
+   };
+
+2. Update OverallStats.tsx:
+   - Remove getAllCourses() call
+   - Remove per-course getStudentStats() calls
+   - Call getOverallStats() instead
+   - Remove fake cards (lines 142-164)
+   - Use real data from API response
+   - Update statsData to use response.overall
+   - Update coursePerformance to use response.courses
+
+FILES TO MODIFY:
+- frontend/src/hooks/api-hooks/useStats.ts (add getOverallStats)
+- frontend/src/components/dashboard/student/OverallStats.tsx
+
+CODE CHANGES:
+// Remove getAllCourses and per-course stats calls
+// Add:
+const { stats, loading, getOverallStats } = useStats();
+
+useEffect(() => {
+  getOverallStats().catch(() => {});
+}, []);
+
+// Remove lines 142-164 (fake cards)
+// Update statsData:
+const statsData = {
+  totalCourses: stats?.overall?.total_enrolled_courses || 0,
+  overallAttendance: stats?.overall?.overall_attendance_percentage || 0,
+  totalSessions: stats?.overall?.total_sessions || 0,
+  attendedSessions: stats?.overall?.attended_sessions || 0,
+};
+
+// Update coursePerformance:
+const coursePerformance = stats?.courses || [];
+
+// Remove fake rank calculation (line 51)
+// Remove "Attendance Trend" card (lines 142-150)
+// Remove "Upcoming Deadlines" card (lines 151-164)
+
+PERFORMANCE IMPROVEMENT:
+- Before: 1 + N API calls (~1s-3s with 4 courses)
+- After: 1 API call (~100-200ms)
+- Result: ~70% faster, cleaner code, accurate data
+
+===============================================================================
+BACKEND APIs STATUS
+===============================================================================
+
+✅ ALL BACKEND APIs COMPLETED (See NEW_BACKEND_APIS.md for details)
+
+1. ✅ GET /api/courses/teacher/students
+   - Get all students enrolled in teacher's courses
+   - For ViewStudents component
+
+2. ✅ GET /api/courses/:courseId/students  
+   - Get students enrolled in specific course
+   - For CourseDetails enrolled students section
+
+3. ✅ GET /api/sessions/active
+   - Get active sessions for student's enrolled courses
+   - For OngoingSessions performance improvement (~80% faster)
+
+4. ✅ GET /api/attendance/stats/overall
+   - Aggregate stats across all enrolled courses
+   - For OverallStats component (~70% faster)
+
+5. ✅ GET /api/courses/enrolled
+   - Get only courses student is enrolled in
+   - For StudentMyCourses (~50% less data)
+
+STILL TODO (Optional):
+6. ⚠ PUT /api/courses/:id (backend exists, needs frontend modal)
+   - Create EditCourseModal.tsx component
+
+===============================================================================
+UNNECESSARY/REDUNDANT COMPONENTS TO REMOVE
+===============================================================================
+
+Teacher Section:
+✗ "New Session" button in ViewCourses header (redundant)
+✗ onViewCourse in ViewCourses (shouldn't manage other's courses)
+✗ "Add Session" button in MyCourses header (redundant, already in CourseDetails)
+
+Student Section:
+✗ Debug button in OngoingSessions
+✗ All console.log statements (after testing)
+✗ Fake data in OverallStats (Attendance Trend, Deadlines)
+✗ Mock student arrays everywhere
+
+General:
+✗ Remove placeholder/demo data
+✗ Remove unused imports after cleanup
+
+===============================================================================
+COMPONENTS THAT ARE GOOD (DON'T CHANGE)
+===============================================================================
+
+Teacher:
+✓ CreateCourseModal - works well
+✓ CreateSessionModal - simplified, works well  
+✓ SessionQRModal - displays QR correctly
+✓ CourseStats - mostly good (uses real APIs)
+
+Student:
+✓ QRScannerModal - camera works correctly
+✓ StudentSidebar - navigation is clean
+✓ AllCourses enrollment - works well
+
+===============================================================================
+API PERFORMANCE ISSUES
+===============================================================================
+
+ISSUE 1: OngoingSessions (Student)
+Current: 1 + N API calls (getAllCourses + N × getCourseSessions)
+Fix: Single API call to /api/sessions/active
+Improvement: From ~500ms-2s to ~50-100ms
+
+ISSUE 2: OverallStats (Student)  
+Current: 1 + N API calls (getAllCourses + N × getStudentStats)
+Fix: Single API call to /api/students/stats
+Improvement: From ~1s-3s to ~100-200ms
+
+ISSUE 3: StudentMyCourses
+Current: getAllCourses (returns ALL) then filters
+Fix: /api/students/enrolled-courses (returns only enrolled)
+Improvement: Smaller payload, faster rendering
+
+===============================================================================
+SUMMARY OF WORK
+===============================================================================
+
+✅ BACKEND: COMPLETE (5 new APIs created)
+✅ FRONTEND: 3/8 components fixed
+⏳ REMAINING: 5 frontend components + optional enhancements
+
+COMPLETED (3):
+✅ Teacher ViewCourses - Security fix
+✅ Teacher MyCourses - UX improvement  
+✅ Teacher CourseDetails - Real student data
+
+REMAINING TEACHER FIXES (2):
+⏳ ViewStudents - Replace mock data (HIGH PRIORITY)
+⏳ MyCourses Edit Modal - Add edit functionality (LOW PRIORITY - optional)
+
+REMAINING STUDENT FIXES (5):
+⏳ AllCourses - Add grid view + filters
+⏳ StudentMyCourses - Integrate enrolled courses API + grid view
+⏳ OngoingSessions - Remove debug + integrate active sessions API
+⏳ AttendanceTracking - Verify/fix API integration
+⏳ OverallStats - Remove fake data + integrate overall stats API
+
+ESTIMATED REMAINING TIME: ~4-6 hours
+
+===============================================================================
+PROGRESS CHECKLIST
+===============================================================================
+
+TEACHER SECTION:
+[✅] ViewCourses.tsx - Security fix (non-clickable, no session creation)
+[✅] MyCourses.tsx - Remove redundant session button
+[✅] CourseDetails.tsx - Real student data integration
+[ ] ViewStudents.tsx - Integrate /api/courses/teacher/students
+[ ] MyCourses.tsx - Add edit course modal (OPTIONAL)
+
+STUDENT SECTION:
+[ ] AllCourses.tsx - Add grid view + filters
+[ ] StudentMyCourses.tsx - Integrate /api/courses/enrolled + grid view
+[ ] OngoingSessions.tsx - Integrate /api/sessions/active + remove debug
+[ ] AttendanceTracking.tsx - Verify API + monthly breakdown
+[ ] OverallStats.tsx - Integrate /api/attendance/stats/overall + remove fakes
+
+API HOOKS TO CREATE/UPDATE:
+[✅] /frontend/src/lib/axios.ts - Centralized axios with VITE_API_URL
+[ ] useStudents.ts - CREATE NEW for getTeacherStudents()
+[ ] useCourses.ts - Add getEnrolledCourses()
+[ ] useSessions.ts - Add getActiveSessions()
+[ ] useStats.ts - Add getOverallStats()
+
+===============================================================================
